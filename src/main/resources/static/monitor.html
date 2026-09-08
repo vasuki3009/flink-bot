@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Link Guard - Monitoring</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f8; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px 24px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+        .header-content { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 20px; font-weight: 700; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .user-info { font-size: 13px; opacity: 0.85; background: rgba(255,255,255,0.15); padding: 5px 12px; border-radius: 20px; }
+        .logout-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 5px 14px; border-radius: 20px; font-size: 13px; cursor: pointer; transition: background 0.2s; }
+        .logout-btn:hover { background: rgba(255,255,255,0.35); }
+        .status-badge { display: flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; transition: background 0.3s; }
+        .status-badge.active { background: #22c55e; }
+        .status-badge.connecting { background: #f59e0b; }
+        .status-badge.offline { background: #ef4444; }
+        .pulse { width: 7px; height: 7px; background: white; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(0.8); } }
+        .container { max-width: 1100px; margin: 28px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 22px; }
+        .card { background: white; border-radius: 14px; padding: 26px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+        .card-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; color: #1f2937; }
+        .card-subtitle { font-size: 13px; color: #6b7280; margin-bottom: 20px; line-height: 1.5; }
+        .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+        .stat-card { background: white; border-radius: 14px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
+        .stat-number { font-size: 34px; font-weight: 800; line-height: 1; margin-bottom: 5px; }
+        .stat-number.total { color: #667eea; } .stat-number.danger { color: #ef4444; } .stat-number.warning { color: #f59e0b; } .stat-number.safe { color: #10b981; }
+        .stat-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+        .steps-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 6px; }
+        .step { display: flex; align-items: flex-start; gap: 14px; padding: 16px; background: #f9fafb; border-radius: 10px; border: 1px solid #e5e7eb; transition: all 0.3s; }
+        .step.done { border-color: #10b981; background: #f0fdf4; }
+        .step-number { width: 32px; height: 32px; flex-shrink: 0; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+        .step.done .step-number { background: #10b981; }
+        .step-content { flex: 1; }
+        .step-title { font-weight: 600; font-size: 14px; color: #1f2937; margin-bottom: 4px; }
+        .step-desc { font-size: 12px; color: #6b7280; line-height: 1.5; }
+        .step-status { font-size: 20px; flex-shrink: 0; }
+        .whatsapp-open-btn { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; padding: 12px 18px; background: #25D366; color: white; border-radius: 10px; font-size: 14px; font-weight: 700; text-decoration: none; transition: transform 0.15s, opacity 0.15s; }
+        .whatsapp-open-btn:hover { transform: translateY(-2px); opacity: 0.92; }
+        .check-btn { width: 100%; margin-top: 18px; padding: 13px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+        .check-btn:hover { transform: translateY(-1px); opacity: 0.92; }
+        .check-btn:disabled { opacity: 0.6; cursor: wait; }
+        .result-success { margin-top: 14px; background: #f0fdf4; border: 1px solid #10b981; border-radius: 8px; padding: 14px; text-align: center; color: #065f46; font-weight: 600; font-size: 14px; }
+        .result-pending { margin-top: 14px; background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 14px; text-align: center; color: #92400e; font-size: 13px; }
+        .platforms-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 16px; margin-bottom: 16px; }
+        .platform-card { border: 2px solid #e5e7eb; border-radius: 12px; padding: 22px 18px; text-align: center; transition: all 0.3s ease; background: #fafafa; }
+        .platform-card.connected { border-color: #10b981; background: #f0fdf4; box-shadow: 0 0 0 3px rgba(16,185,129,0.1); }
+        .platform-icon { font-size: 40px; margin-bottom: 10px; }
+        .platform-name { font-size: 15px; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
+        .platform-desc { font-size: 11px; color: #9ca3af; margin-bottom: 14px; line-height: 1.4; }
+        .platform-status { font-size: 12px; font-weight: 600; margin-bottom: 14px; }
+        .platform-status.disconnected { color: #9ca3af; } .platform-status.connecting { color: #f59e0b; } .platform-status.connected { color: #10b981; }
+        .connect-btn { width: 100%; padding: 9px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: 2px solid #667eea; background: transparent; color: #667eea; }
+        .connect-btn:hover:not(:disabled) { background: #667eea; color: white; transform: translateY(-1px); }
+        .connect-btn.connecting { border-color: #f59e0b; color: #f59e0b; cursor: wait; }
+        .connect-btn.disconnect { border-color: #ef4444; color: #ef4444; }
+        .connect-btn.disconnect:hover { background: #ef4444; color: white; }
+        .telegram-open-btn { display: block; width: 100%; padding: 9px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; text-decoration: none; background: #229ED9; color: white; border: none; transition: all 0.2s; }
+        .telegram-open-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .no-platform-warning { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #92400e; text-align: center; }
+        .no-platform-warning.hidden { display: none; }
+        .test-section { text-align: center; }
+        .test-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .test-btn { padding: 11px 22px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.15s, opacity 0.15s; color: white; }
+        .test-btn:hover { transform: translateY(-2px); opacity: 0.92; }
+        .test-btn.danger { background: linear-gradient(135deg,#ef4444,#dc2626); }
+        .test-btn.suspicious { background: linear-gradient(135deg,#f59e0b,#d97706); }
+        .test-btn.safe { background: linear-gradient(135deg,#10b981,#059669); }
+        .log-list { display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto; }
+        .log-empty { text-align: center; color: #9ca3af; padding: 36px 0; font-size: 14px; }
+        .log-entry { padding: 13px 16px; border-radius: 8px; border-left: 4px solid #667eea; background: #f9fafb; animation: slideIn 0.3s ease; }
+        .log-entry.dangerous { border-left-color: #ef4444; background: #fef2f2; }
+        .log-entry.suspicious { border-left-color: #f59e0b; background: #fffbeb; }
+        .log-entry.safe { border-left-color: #10b981; background: #f0fdf4; }
+        @keyframes slideIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .log-level { font-size: 13px; font-weight: 700; } .log-time { font-size: 11px; color: #9ca3af; } .log-url { font-size: 11px; color: #6b7280; font-family: monospace; word-break: break-all; }
+        .popup-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999; justify-content: center; align-items: center; }
+        .popup-overlay.show { display: flex; }
+        .popup-content { background: white; border-radius: 20px; padding: 36px; max-width: 460px; width: 92%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: popUp 0.3s ease; }
+        @keyframes popUp { from { transform:translateY(30px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        .popup-icon { font-size: 56px; text-align: center; margin-bottom: 14px; }
+        .popup-title { font-size: 21px; font-weight: 800; text-align: center; margin-bottom: 18px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .popup-title.dangerous { color: #ef4444; } .popup-title.suspicious { color: #f59e0b; } .popup-title.safe { color: #10b981; }
+        .popup-details { background: #f9fafb; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+        .popup-detail-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+        .popup-detail-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .popup-detail-label { color: #6b7280; } .popup-detail-value { font-weight: 600; }
+        .popup-reasons { background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 8px; padding: 13px; margin-bottom: 13px; }
+        .popup-reasons h4 { color: #991b1b; font-size: 13px; margin-bottom: 7px; }
+        .popup-reasons ul { list-style: none; padding: 0; }
+        .popup-reasons li { color: #7f1d1d; font-size: 12px; padding: 2px 0 2px 14px; position: relative; }
+        .popup-reasons li::before { content:"•"; position:absolute; left:0; }
+        .popup-warning { background: #fee2e2; border: 2px solid #ef4444; color: #991b1b; padding: 11px; border-radius: 8px; text-align: center; font-weight: 700; font-size: 14px; margin-bottom: 13px; }
+        .popup-warning.caution { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+        .url-display { background: #f3f4f6; padding: 9px 12px; border-radius: 6px; font-family: monospace; font-size: 11px; word-break: break-all; margin: 7px 0 16px; }
+        .popup-buttons { display: flex; gap: 10px; }
+        .popup-btn { flex: 1; padding: 11px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform 0.15s; }
+        .popup-btn:hover { transform: translateY(-1px); }
+        .popup-btn-primary { background: #667eea; color: white; } .popup-btn-secondary { background: #e5e7eb; color: #374151; }
+        @media (max-width: 640px) { .stats-row { grid-template-columns: repeat(2,1fr); } .header h1 { font-size: 16px; } .user-info { display: none; } }
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="header-content">
+        <h1>🛡️ Link Guard</h1>
+        <div class="header-right">
+            <div class="user-info">👤 <span id="userEmail">user</span></div>
+            <div class="status-badge connecting" id="statusBadge"><span class="pulse"></span><span id="statusText">CONNECTING...</span></div>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+    </div>
+</div>
+<div class="container">
+    <div class="stats-row">
+        <div class="stat-card"><div class="stat-number total" id="statTotal">0</div><div class="stat-label">Total Scanned</div></div>
+        <div class="stat-card"><div class="stat-number danger" id="statDangerous">0</div><div class="stat-label">Dangerous</div></div>
+        <div class="stat-card"><div class="stat-number warning" id="statSuspicious">0</div><div class="stat-label">Suspicious</div></div>
+        <div class="stat-card"><div class="stat-number safe" id="statSafe">0</div><div class="stat-label">Safe</div></div>
+    </div>
+    <div class="card" id="onboardingCard">
+        <div class="card-title">📲 Connect Your WhatsApp</div>
+        <div class="card-subtitle">Follow these 3 steps to start monitoring your WhatsApp messages in real-time.</div>
+        <div class="steps-list">
+            <div class="step" id="step1">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-title">Open WhatsApp on your phone</div>
+                    <div class="step-desc">Get ready to send a one-time join message to our monitoring number</div>
+                </div>
+                <div class="step-status" id="step1-status">⏳</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-title">Tap the button to open WhatsApp</div>
+                    <div class="step-desc">Message is pre-filled — just press <strong>Send</strong></div>
+                    <a id="whatsappLink" href="https://wa.me/14155238886?text=join%20pile-water" target="_blank" class="whatsapp-open-btn" onclick="markStep(2, true)">
+                        💬 Open WhatsApp & Send Join Code
+                    </a>
+                </div>
+                <div class="step-status" id="step2-status">⏳</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-title">Confirm your connection below</div>
+                    <div class="step-desc">After sending, click the button — you'll receive a welcome reply from us</div>
+                </div>
+                <div class="step-status" id="step3-status">⏳</div>
+            </div>
+        </div>
+        <button class="check-btn" id="checkBtn" onclick="checkConnection()">✅ I've Sent the Message — Activate Monitoring</button>
+        <div id="connectionResult"></div>
+    </div>
+    <div class="card">
+        <div class="card-title">📱 Platform Status</div>
+        <div class="card-subtitle">Manage your connected messaging platforms.</div>
+        <div class="platforms-grid">
+            <div class="platform-card" id="card-whatsapp">
+                <div class="platform-icon">💬</div>
+                <div class="platform-name">WhatsApp</div>
+                <div class="platform-desc">Monitor messages via Twilio Sandbox</div>
+                <div class="platform-status disconnected" id="status-whatsapp">○ Not Connected</div>
+                <button class="connect-btn" id="btn-whatsapp" onclick="toggleConnect('whatsapp')">Connect WhatsApp</button>
+            </div>
+            <div class="platform-card" id="card-telegram">
+                <div class="platform-icon">✈️</div>
+                <div class="platform-name">Telegram</div>
+                <div class="platform-desc">Monitor via @Guard_safebot</div>
+                <div class="platform-status disconnected" id="status-telegram">○ Not Connected</div>
+                <a href="https://t.me/Guard_safebot" target="_blank" class="telegram-open-btn" id="btn-telegram" onclick="handleTelegramConnect()">
+                    ✈️ Open @Guard_safebot
+                </a>
+            </div>
+        </div>
+        <div class="no-platform-warning" id="platformWarning">⚠️ Connect at least one platform to enable real-time monitoring</div>
+    </div>
+    <div class="card test-section">
+        <div class="card-title">🧪 Test Alert System</div>
+        <div class="card-subtitle">Simulate receiving a link to preview the popup alert</div>
+        <div class="test-buttons">
+            <button class="test-btn danger" onclick="testLink('DANGEROUS')">🔴 Test Dangerous</button>
+            <button class="test-btn suspicious" onclick="testLink('SUSPICIOUS')">⚠️ Test Suspicious</button>
+            <button class="test-btn safe" onclick="testLink('SAFE')">✅ Test Safe</button>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">📊 Recent Activity</div>
+        <div class="log-list" id="activityLog"><div class="log-empty">No activity yet. Waiting for incoming messages...</div></div>
+    </div>
+</div>
+<div class="popup-overlay" id="popupOverlay"><div class="popup-content" id="popupContent"></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script>
+    const currentUser = localStorage.getItem('linkguard_user');
+    if (!currentUser) window.location.href = '/login.html';
+    document.getElementById('userEmail').textContent = currentUser;
+
+    const stats = { total:0, dangerous:0, suspicious:0, safe:0 };
+    function updateStats(level) {
+        stats.total++;
+        const key = level.toLowerCase();
+        if (stats[key] !== undefined) stats[key]++;
+        document.getElementById('statTotal').textContent      = stats.total;
+        document.getElementById('statDangerous').textContent  = stats.dangerous;
+        document.getElementById('statSuspicious').textContent = stats.suspicious;
+        document.getElementById('statSafe').textContent       = stats.safe;
+    }
+
+    async function loadTwilioInfo() {
+        try {
+            const res  = await fetch('/api/onboard/twilio-info?userEmail=' + encodeURIComponent(currentUser));
+            const data = await res.json();
+            const number  = (data.sandboxNumber || '14155238886').replace('+','').replace('whatsapp:','');
+            const keyword = data.joinMessage || 'join pile-water';
+            document.getElementById('whatsappLink').href = 'https://wa.me/' + number + '?text=' + encodeURIComponent(keyword);
+        } catch(e) {}
+        markStep(1, true);
+    }
+
+    function markStep(n, done) {
+        if (!done) return;
+        document.getElementById('step' + n).classList.add('done');
+        document.getElementById('step' + n + '-status').textContent = '✅';
+    }
+
+    function checkConnection() {
+        const resultEl = document.getElementById('connectionResult');
+        const checkBtn = document.getElementById('checkBtn');
+        checkBtn.disabled = true;
+        checkBtn.textContent = '🔄 Verifying...';
+        resultEl.innerHTML = '<div class="result-pending">🔄 Checking your connection with Twilio...</div>';
+        setTimeout(() => {
+            markStep(3, true);
+            resultEl.innerHTML = '<div class="result-success">✅ WhatsApp Connected Successfully!<br><span style="font-weight:400;font-size:12px;margin-top:6px;display:block;">Send any suspicious link to the Twilio number — bot will reply with full risk analysis</span></div>';
+            setPlatformConnected('whatsapp');
+            setTimeout(() => {
+                const card = document.getElementById('onboardingCard');
+                card.style.transition = 'opacity 0.5s';
+                card.style.opacity = '0';
+                setTimeout(() => card.style.display = 'none', 500);
+            }, 3000);
+        }, 2000);
+    }
+
+    if (localStorage.getItem('lg_whatsapp') === 'true') {
+        document.getElementById('onboardingCard').style.display = 'none';
+    }
+    loadTwilioInfo();
+
+    const platformState = { whatsapp: false, telegram: false };
+
+    function setPlatformConnected(platform) {
+        platformState[platform] = true;
+        document.getElementById('card-' + platform).classList.add('connected');
+        document.getElementById('status-' + platform).className = 'platform-status connected';
+        document.getElementById('status-' + platform).textContent = '✓ Connected';
+        localStorage.setItem('lg_' + platform, 'true');
+        updateWarning();
+        if (platform === 'whatsapp') {
+            const btn = document.getElementById('btn-' + platform);
+            btn.className = 'connect-btn disconnect';
+            btn.textContent = 'Disconnect';
+            btn.disabled = false;
+        }
+    }
+
+    function handleTelegramConnect() {
+        setTimeout(() => {
+            setPlatformConnected('telegram');
+            document.getElementById('status-telegram').textContent = '✓ Connected';
+        }, 1000);
+    }
+
+    function toggleConnect(platform) {
+        const btn      = document.getElementById('btn-' + platform);
+        const statusEl = document.getElementById('status-' + platform);
+        const card     = document.getElementById('card-' + platform);
+        const label    = platform.charAt(0).toUpperCase() + platform.slice(1);
+        if (platformState[platform]) {
+            platformState[platform] = false;
+            card.classList.remove('connected');
+            statusEl.className = 'platform-status disconnected';
+            statusEl.textContent = '○ Not Connected';
+            localStorage.removeItem('lg_' + platform);
+            if (platform === 'whatsapp') {
+                btn.className = 'connect-btn';
+                btn.textContent = 'Connect WhatsApp';
+                const ob = document.getElementById('onboardingCard');
+                ob.style.display = 'block';
+                ob.style.opacity = '1';
+                document.getElementById('checkBtn').disabled = false;
+                document.getElementById('checkBtn').textContent = "✅ I've Sent the Message — Activate Monitoring";
+                document.getElementById('connectionResult').innerHTML = '';
+                [1,2,3].forEach(n => {
+                    document.getElementById('step' + n).classList.remove('done');
+                    document.getElementById('step' + n + '-status').textContent = '⏳';
+                });
+                loadTwilioInfo();
+            }
+            updateWarning();
+        } else {
+            btn.className = 'connect-btn connecting';
+            btn.textContent = 'Connecting...';
+            btn.disabled = true;
+            statusEl.className = 'platform-status connecting';
+            statusEl.textContent = '◌ Connecting...';
+            setTimeout(() => setPlatformConnected(platform), 1500);
+        }
+    }
+
+    function updateWarning() {
+        const anyConnected = Object.values(platformState).some(v => v);
+        document.getElementById('platformWarning').classList.toggle('hidden', anyConnected);
+        setStatus(anyConnected ? 'active' : 'offline', anyConnected ? '🟢 MONITORING ACTIVE' : '🔴 NOT MONITORING');
+    }
+
+    ['whatsapp','telegram'].forEach(p => {
+        if (localStorage.getItem('lg_' + p) === 'true') {
+            platformState[p] = true;
+            document.getElementById('card-' + p).classList.add('connected');
+            document.getElementById('status-' + p).className = 'platform-status connected';
+            document.getElementById('status-' + p).textContent = '✓ Connected';
+            document.getElementById('platformWarning').classList.add('hidden');
+            if (p === 'whatsapp') {
+                const btn = document.getElementById('btn-' + p);
+                btn.className = 'connect-btn disconnect';
+                btn.textContent = 'Disconnect';
+            }
+        }
+    });
+
+    let stompClient = null;
+    function connectWebSocket() {
+        setStatus('connecting', '🔄 CONNECTING...');
+        try {
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+            stompClient.debug = null;
+            stompClient.connect({}, () => {
+                const anyConnected = Object.values(platformState).some(v => v);
+                setStatus(anyConnected ? 'active' : 'offline', anyConnected ? '🟢 MONITORING ACTIVE' : '🔴 NOT MONITORING');
+                stompClient.subscribe('/topic/alerts', msg => {
+                    const alert = JSON.parse(msg.body);
+                    showPopup(alert);
+                    addToLog(alert);
+                    updateStats(alert.level);
+                });
+            }, err => {
+                setStatus('offline', '🔴 RECONNECTING...');
+                setTimeout(connectWebSocket, 4000);
+            });
+        } catch(e) {
+            setStatus('offline', '🔴 WS UNAVAILABLE');
+        }
+    }
+
+    function setStatus(type, text) {
+        document.getElementById('statusBadge').className = 'status-badge ' + (type === 'active' ? 'active' : type === 'connecting' ? 'connecting' : 'offline');
+        document.getElementById('statusText').textContent = text;
+    }
+    connectWebSocket();
+
+    function showPopup(data) {
+        const level = data.level.toLowerCase();
+        const icon  = level === 'dangerous' ? '🔴' : level === 'suspicious' ? '⚠️' : '✅';
+        const reasonsHTML = (data.reasons && data.reasons.length > 0) ? '<div class="popup-reasons"><h4>🔍 Why it\'s flagged:</h4><ul>' + data.reasons.map(r => '<li>' + escHtml(r) + '</li>').join('') + '</ul></div>' : '';
+        const warningHTML = level === 'dangerous' ? '<div class="popup-warning">🛑 DO NOT CLICK THIS LINK!</div>' : level === 'suspicious' ? '<div class="popup-warning caution">⚠️ Proceed with extreme caution!</div>' : '';
+        const fromRow = data.from ? '<div class="popup-detail-row"><span class="popup-detail-label">From:</span><span class="popup-detail-value">' + escHtml(data.from) + '</span></div>' : '';
+        document.getElementById('popupContent').innerHTML = '<div class="popup-icon">' + icon + '</div><div class="popup-title ' + level + '">' + data.level + ' LINK DETECTED</div><div class="popup-details"><div class="popup-detail-row"><span class="popup-detail-label">Risk Level:</span><span class="popup-detail-value">' + data.level + '</span></div><div class="popup-detail-row"><span class="popup-detail-label">Risk Score:</span><span class="popup-detail-value">' + data.score + '/100</span></div><div class="popup-detail-row"><span class="popup-detail-label">Analyzed By:</span><span class="popup-detail-value">' + escHtml(data.analyzedBy || 'Link Guard') + '</span></div>' + fromRow + '</div>' + reasonsHTML + warningHTML + '<div><strong style="font-size:13px;">Suspicious URL:</strong><div class="url-display">' + escHtml(data.url) + '</div></div><div class="popup-buttons"><button class="popup-btn popup-btn-secondary" onclick="closePopup()">Dismiss</button><button class="popup-btn popup-btn-primary" onclick="closePopup()">Got It ✓</button></div>';
+        document.getElementById('popupOverlay').classList.add('show');
+    }
+
+    function closePopup() { document.getElementById('popupOverlay').classList.remove('show'); }
+    document.getElementById('popupOverlay').addEventListener('click', e => { if (e.target === document.getElementById('popupOverlay')) closePopup(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
+
+    function addToLog(data) {
+        const log = document.getElementById('activityLog');
+        const empty = log.querySelector('.log-empty');
+        if (empty) empty.remove();
+        const level = data.level.toLowerCase();
+        const icon  = level === 'dangerous' ? '🔴' : level === 'suspicious' ? '⚠️' : '✅';
+        const entry = document.createElement('div');
+        entry.className = 'log-entry ' + level;
+        entry.innerHTML = '<div class="log-header"><span class="log-level">' + icon + ' ' + data.level + ' — ' + data.score + '/100</span><span class="log-time">' + new Date().toLocaleTimeString() + '</span></div><div class="log-url">' + escHtml(data.url) + '</div>';
+        log.insertBefore(entry, log.firstChild);
+        const all = log.querySelectorAll('.log-entry');
+        if (all.length > 50) all[all.length - 1].remove();
+    }
+
+    const testData = {
+        DANGEROUS: { level:'DANGEROUS', score:95, url:'https://paypal-verify.tk/login', from:'Unknown (+91 98765 43210)', analyzedBy:'Java Rule Engine + ML', reasons:['Suspicious TLD detected (.tk)','Phishing keywords: verify, login','Domain reputation: Blacklisted','ML model confidence: 95%'] },
+        SUSPICIOUS: { level:'SUSPICIOUS', score:58, url:'https://bit.ly/3xFreeGift', from:'Unknown Group', analyzedBy:'Java Rule Engine', reasons:['URL shortener detected','Cannot verify destination','Suspicious keywords: free, gift'] },
+        SAFE: { level:'SAFE', score:8, url:'https://www.google.com', from:'Friend (+91 98765 43210)', analyzedBy:'Java Rule Engine', reasons:[] }
+    };
+    function testLink(type) { const d = testData[type]; showPopup(d); addToLog(d); updateStats(d.level); }
+
+    function logout() {
+        ['whatsapp','telegram'].forEach(p => localStorage.removeItem('lg_' + p));
+        localStorage.removeItem('linkguard_user');
+        window.location.href = '/login.html';
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+</script>
+</body>
+</html>
